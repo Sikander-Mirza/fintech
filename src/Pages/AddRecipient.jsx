@@ -16,7 +16,7 @@ const AddRecipient = () => {
 
   const { amount } = location.state || {};
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
   e.preventDefault();
 
   if (!amount || !pin || !userId) {
@@ -29,13 +29,12 @@ const AddRecipient = () => {
   try {
     setLoading(true);
 
-    const response = await axios.post(
-      'http://localhost:9000/api/transaction/transfer',
+    // 1. Try to add recipient
+    await axios.post(
+      'http://localhost:9000/api/recipient/add',
       {
-        amount,                         // ✅ transaction amount
-        recipient_account_number: userId, // ✅ userId sent as account number
-        description: alias,             // ✅ alias used as optional description
-        transaction_pin: pin            // ✅ pin field renamed
+        name: alias,
+        account_number: userId
       },
       {
         headers: {
@@ -44,28 +43,46 @@ const AddRecipient = () => {
       }
     );
 
-    console.log('Transfer success:', response.data);
-    alert('Transfer successful!');
+    // 2. Proceed to transfer (regardless of recipient save success/failure)
+    await axios.post(
+      'http://localhost:9000/api/transaction/transfer',
+      {
+        amount,
+        recipient_account_number: userId,
+        description: alias,
+        transaction_pin: pin
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        }
+      }
+    );
+
+    // 3. Local balance update
     const storedUser = localStorage.getItem('user');
-if (storedUser) {
-  const parsedUser = JSON.parse(storedUser);
-  const updatedBalance = (parsedUser.balance || 0) - Number(amount);
-  localStorage.setItem(
-    'user',
-    JSON.stringify({
-      ...parsedUser,
-      balance: updatedBalance
-    })
-  );
-}
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      const updatedBalance = (parsedUser.balance || 0) - Number(amount);
+      localStorage.setItem(
+        'user',
+        JSON.stringify({
+          ...parsedUser,
+          balance: updatedBalance
+        })
+      );
+    }
+
+    alert('Transfer successful!');
     navigate('/dashboard');
   } catch (error) {
-    console.error('Transfer failed:', error.response?.data || error.message);
-    alert(error.response?.data?.message || 'Transfer failed');
+    console.error('Error:', error.response?.data || error.message);
+    alert(error.response?.data?.message || 'An error occurred');
   } finally {
     setLoading(false);
   }
 };
+
 
 
 

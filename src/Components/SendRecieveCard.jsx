@@ -6,15 +6,18 @@ import profileimg from '../assets/profileimg.png'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios';
 
-const recipientsList = [
-  { name: 'Owen F.', img: profileimg },
-  { name: 'Faiz Ali', img: profileimg },
-  { name: 'Ayesha K.', img: profileimg },
-];
+// const recipientsList = [
+//   { name: 'Owen F.', img: profileimg },
+//   { name: 'Faiz Ali', img: profileimg },
+//   { name: 'Ayesha K.', img: profileimg },
+// ];
 const recentsList = [
   { name: 'Ayesha K.', img: profileimg },
   { name: 'Owen F.', img: profileimg },
 ];
+
+const token = localStorage.getItem("token");
+
 
 const ActionButton = ({ icon: Icon, label, onClick, variant }) => {
   const { isDarkMode } = useTheme();
@@ -101,17 +104,17 @@ const Keypad = ({ value, setValue, max = 6, onSendKeyPress }) => (
 
 
 const SendModal = ({ show, onClose, setBalance }) => {
+  const [recipientsList, setRecipientsList] = useState([]);
   const { isDarkMode } = useTheme();
   const [tab, setTab] = useState('send');
-  const [recipient, setRecipient] = useState(recipientsList[0]);
+  const [recipient, setRecipient] = useState(null); // updated to null
   const [amount, setAmount] = useState('');
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0); // 👈 NEW STATE
+  const [walletBalance, setWalletBalance] = useState(0);
   const navigate = useNavigate();
 
-  // 🔄 Sync balance from localStorage
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     if (storedUser?.balance) {
@@ -121,15 +124,36 @@ const SendModal = ({ show, onClose, setBalance }) => {
 
   useEffect(() => {
     if (!dropdownOpen) return;
-    function handleClick(e) {
+    const handleClick = (e) => {
       if (!e.target.closest('.recipient-dropdown')) setDropdownOpen(false);
-    }
+    };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [dropdownOpen]);
 
+  useEffect(() => {
+    const fetchRecipients = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('http://localhost:9000/api/recipient/list', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        setRecipientsList(res.data.recipients || []);
+      } catch (err) {
+        console.error("Error fetching recipients:", err.message);
+      }
+    };
+
+    fetchRecipients();
+  }, []);
+
   const handleRecipientSelect = (r) => {
-    setRecipient(r);
+    setRecipient({
+      name: r.name,
+      account_number: r.account_number
+    });
     setTab('send');
     setDropdownOpen(false);
   };
@@ -146,7 +170,7 @@ const SendModal = ({ show, onClose, setBalance }) => {
       setWalletBalance(newBalance);
       if (setBalance) setBalance(newBalance);
       localStorage.setItem('user', JSON.stringify({ ...JSON.parse(localStorage.getItem('user')), balance: newBalance }));
-      playSound('https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa4c7b.mp3');
+      new Audio('https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa4c7b.mp3').play();
       setTimeout(() => {
         setSuccess(false);
         setAmount('');
@@ -158,32 +182,70 @@ const SendModal = ({ show, onClose, setBalance }) => {
   return (
     <AnimatePresence>
       {show && (
-        <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" initial="hidden" animate="visible" exit="exit" variants={sheetVariants}>
-          <motion.div className="w-full max-w-md mx-auto bg-white dark:bg-gray-900 rounded-t-3xl p-6 relative shadow-xl min-h-[70vh] flex flex-col" initial={{ scale: 0.98 }} animate={{ scale: 1 }} exit={{ scale: 0.98 }} onClick={(e) => e.stopPropagation()}>
+        <motion.div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          variants={sheetVariants}
+        >
+          <motion.div
+            className="w-full max-w-md mx-auto bg-white dark:bg-gray-900 rounded-t-3xl p-6 relative shadow-xl min-h-[70vh] flex flex-col"
+            initial={{ scale: 0.98 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.98 }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-center mb-4 mt-2">
               <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#A6E22E] flex items-center justify-center">
-                <img src={recipient.img} alt={recipient.name} className="w-full h-full object-cover" />
+                {recipient?.name ? (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-300 text-white font-bold text-lg">
+                    {recipient.name.charAt(0).toUpperCase()}
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-300 text-white font-bold text-lg">
+                    ?
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex justify-center mb-2">
               <div className="relative recipient-dropdown">
                 <button onClick={() => setDropdownOpen((v) => !v)} className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 font-medium">
-                  {recipient.name} <ChevronDown size={18} />
+                   <ChevronDown size={18} />
                 </button>
                 {dropdownOpen && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute left-0 mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-lg z-10">
-                    <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">Recents</div>
-                    {recentsList.map((r, i) => (
-                      <button key={i} className="flex items-center gap-2 px-4 py-2 w-full hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleRecipientSelect(r)}>
-                        <img src={r.img} alt={r.name} className="w-6 h-6 rounded-full" /> {r.name}
-                      </button>
-                    ))}
+                 <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">All Contacts</div>
+{recipientsList.map((r, i) => (
+  <button
+    key={i}
+    className="flex items-center gap-2 px-4 py-2 w-full hover:bg-gray-100 dark:hover:bg-gray-700"
+    onClick={() => handleRecipientSelect(r)}
+  >
+    <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-semibold uppercase">
+      {r.name?.charAt(0)}
+    </div>
+    <span className="text-gray-800 dark:text-white">{r.name}</span>
+  </button>
+))}
+
+
                     <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">All Contacts</div>
                     {recipientsList.map((r, i) => (
-                      <button key={i} className="flex items-center gap-2 px-4 py-2 w-full hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleRecipientSelect(r)}>
-                        <img src={r.img} alt={r.name} className="w-6 h-6 rounded-full" /> {r.name}
-                      </button>
-                    ))}
+  <button
+    key={i}
+    className="flex items-center gap-2 px-4 py-2 w-full hover:bg-gray-100 dark:hover:bg-gray-700"
+    onClick={() => handleRecipientSelect(r)}
+  >
+    <img
+      src={r.img}
+      alt={r.name}
+      className="w-6 h-6 rounded-full"
+    />
+    <span className="text-gray-800 dark:text-white">{r.name}</span>
+  </button>
+))}
                     <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
                     <button
                       className="flex items-center gap-2 px-4 py-2 w-full text-[#A6E22E] hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"

@@ -15,14 +15,19 @@ import { motion } from 'framer-motion';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
-const Dashboard = ({ userName = "User" }) => {
+const Dashboard = () => {
   const [greeting, setGreeting] = useState(getGreeting());
   const [tip, setTip] = useState(getRandomTip());
-  const [balance, setBalance] = useState(20340); // Initial balance
   const [budgetTotal, setBudgetTotal] = useState(100); // Initial budget
   const [budgetSpent, setBudgetSpent] = useState(90); // Initial spent
   const { isDarkMode, toggleDarkMode } = useTheme();
-
+  const [userName, setUserName] = useState("User");
+ useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    if (storedUser?.name) {
+      setUserName(storedUser.name);
+    }
+  }, []);
   // Update greeting every minute
   useEffect(() => {
     const timer = setInterval(() => {
@@ -129,7 +134,7 @@ const Dashboard = ({ userName = "User" }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <BalanceCard balance={balance} />
+            <BalanceCard  />
           </motion.div>
 
           {/* Quick Actions Grid */}
@@ -140,7 +145,7 @@ const Dashboard = ({ userName = "User" }) => {
             transition={{ duration: 0.5, delay: 0.4 }}
           >
             <BudgetCard budgetTotal={budgetTotal} budgetSpent={budgetSpent} />
-            <SendRecieveCard balance={balance} setBalance={setBalance} />
+            <SendRecieveCard  />
           </motion.div>
 
           {/* QR Section */}

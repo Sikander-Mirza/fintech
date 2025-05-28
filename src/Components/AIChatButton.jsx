@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send } from 'lucide-react';
+import { X, Send, Loader2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import axios from 'axios';
 
@@ -11,50 +11,193 @@ const AIIcon = () => (
     <path d="M2 16L16 23L30 16L16 9L2 16Z" fill="currentColor" fillOpacity="0.6" />
   </svg>
 );
+const parseTransferInstruction = (text) => {
+  const match = text.match(/send\s+PKR\s*(\d+)\s+to\s+([a-zA-Z ]+)/i);
+  if (match) {
+    return {
+      amount: parseInt(match[1]),
+      recipientName: match[2].trim()
+    };
+  }
+  if (transferDetails && !transferExecuted) {
+  setPendingTransfer(transferDetails);
+  setConfirming(true);
+}
+
+  return null;
+};
+
 
 const AIChatButton = () => {
+  const [pendingTransfer, setPendingTransfer] = useState(null); // { amount, recipientName }
+const [confirming, setConfirming] = useState(false);
+const [pin, setPin] = useState('');
+
   const { isDarkMode } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [showTooltip, setShowTooltip] = useState(true);
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState([]);
   const [sending, setSending] = useState(false);
+const [showPinModal, setShowPinModal] = useState(false);
+const [transferExecuted, setTransferExecuted] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowTooltip(false), 5000);
     return () => clearTimeout(timer);
   }, []);
 
-  const sendMessage = async () => {
-    if (!question.trim()) return;
+const confirmTransfer = async () => {
+  if (!pendingTransfer || !pin.trim() || transferExecuted) return;
 
+  setTransferExecuted(true); // 🔒 lock to prevent double calls
+
+  const storedUser = JSON.parse(localStorage.getItem('user'));
+  const user_id = storedUser?.id;
+  const token = localStorage.getItem('token');
+
+  try {
+    const res = await axios.get('http://localhost:9000/api/auth/users', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const users = res.data;
+    const recipient = users.find(
+      u => u.name.toLowerCase() === pendingTransfer.recipientName.toLowerCase()
+    );
+
+    if (!recipient || !recipient.linked_bank_accounts?.[0]) {
+      throw new Error('Recipient or their bank account not found.');
+    }
+
+    const recipient_account_number = recipient.linked_bank_accounts[0].account_number;
+
+    await axios.post(
+      'http://localhost:9000/api/transaction/transfer',
+      {
+        sender_id: user_id,
+        recipient_account_number,
+        amount: pendingTransfer.amount,
+        transaction_pin: pin
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    setMessages(prev => [
+      ...prev,
+      {
+        from: 'ai',
+        text: `✅ Transfer of PKR ${pendingTransfer.amount} to ${pendingTransfer.recipientName} completed.`
+      }
+    ]);
+  } catch (err) {
+    console.error(err);
+    setMessages(prev => [
+      ...prev,
+      {
+        from: 'ai',
+        text: `❌ Transfer failed: ${err.response?.data?.message || err.message}`
+      }
+    ]);
+  } finally {
+    setPendingTransfer(null);
+    setConfirming(false);
+    setShowPinModal(false);
+    setPin('');
+    setTransferExecuted(false); // reset lock for next use
+  }
+};
+
+
+
+
+  // 🔁 Load chat history on open
+useEffect(() => {
+  const fetchHistory = async () => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     const user_id = storedUser?.id;
-
-    if (!user_id) {
-      alert("User ID not found.");
-      return;
-    }
-
-    setMessages(prev => [...prev, { from: 'user', text: question }]);
-    setQuestion('');
-    setSending(true);
+    if (!user_id) return;
 
     try {
-      const res = await axios.post('http://localhost:9000/api/ai/query', {
-        user_id,
-        question
-      });
+      const res = await axios.get(`http://localhost:9000/api/ai/history/${user_id}`);
+      const rawHistory = res.data.history || [];
 
-      const reply = res.data?.answer || "Sorry, I couldn't understand that.";
-      setMessages(prev => [...prev, { from: 'ai', text: reply }]);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to get response.");
-    } finally {
-      setSending(false);
+      // 🔁 Normalize into user/ai messages
+      const formatted = rawHistory.flatMap(entry => [
+        { from: 'user', text: entry.query },
+        { from: 'ai', text: entry.ai_response }
+      ]);
+
+      setMessages(formatted);
+    } catch (err) {
+      console.error("Failed to load history:", err.message);
     }
   };
+
+  if (isOpen) fetchHistory();
+}, [isOpen]);
+
+
+
+const sendMessage = async () => {
+  if (!question.trim()) return;
+
+  const storedUser = JSON.parse(localStorage.getItem('user'));
+  const user_id = storedUser?.id;
+  if (!user_id) return alert("User not found");
+
+  const lowerCaseQuestion = question.trim().toLowerCase();
+
+  // ✅ If waiting for confirmation and user says "yes"
+  if (confirming && pendingTransfer && (lowerCaseQuestion === 'yes' || lowerCaseQuestion === 'y')) {
+    setMessages(prev => [...prev, { from: 'user', text: question }]); // log "yes"
+    // setConfirming(false);
+    setShowPinModal(true);  // ✅ this opens PIN modal
+    setQuestion('');
+    return;
+  }
+
+  // ❌ User cancels transfer
+  if (confirming && (lowerCaseQuestion === 'no' || lowerCaseQuestion === 'n')) {
+    setMessages(prev => [...prev, { from: 'user', text: question }, { from: 'ai', text: '❌ Transfer cancelled.' }]);
+    setConfirming(false);
+    setPendingTransfer(null);
+    setPin('');
+    setQuestion('');
+    return;
+  }
+
+  // 🧠 Normal AI flow
+  setMessages(prev => [...prev, { from: 'user', text: question }]);
+  setQuestion('');
+  setSending(true);
+
+  try {
+    const res = await axios.post('http://localhost:9000/api/ai/query', {
+      user_id,
+      question
+    });
+
+    const reply = res.data?.answer || "Sorry, I couldn't understand that.";
+    setMessages(prev => [...prev, { from: 'ai', text: reply }]);
+
+    const transferDetails = parseTransferInstruction(reply);
+    if (transferDetails) {
+      setPendingTransfer(transferDetails);
+      setConfirming(true); // waits for yes/no
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Failed to get response.");
+  } finally {
+    setSending(false);
+  }
+};
+
+
+
 
   return (
     <>
@@ -132,7 +275,6 @@ const AIChatButton = () => {
 
               <div className="flex flex-col h-[calc(100vh-280px)]">
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {/* Messages */}
                   {messages.map((msg, idx) => (
                     <div
                       key={idx}
@@ -147,9 +289,16 @@ const AIChatButton = () => {
                       {msg.text}
                     </div>
                   ))}
+                  {sending && (
+                    <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm flex items-center gap-2 ${
+                      isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      <Loader2 className="animate-spin" size={18} />
+                      Typing...
+                    </div>
+                  )}
                 </div>
 
-                {/* Input */}
                 <div className={`p-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
                   <div className="flex items-center gap-3 max-w-3xl mx-auto">
                     <input
@@ -183,6 +332,29 @@ const AIChatButton = () => {
           )}
         </AnimatePresence>
       </div>
+
+     {showPinModal && pendingTransfer && (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl max-w-sm w-full">
+      <h2 className="text-lg font-semibold mb-4 text-center text-gray-800 dark:text-gray-200">
+        Enter PIN to confirm sending PKR {pendingTransfer.amount} to {pendingTransfer.recipientName}
+      </h2>
+      <input
+        type="password"
+        placeholder="Enter Transaction PIN"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+        className="w-full mb-4 p-2 rounded-lg border dark:bg-gray-700 dark:text-white"
+      />
+      <div className="flex justify-between">
+        <button onClick={() => { setShowPinModal(false); setPin(''); }} className="px-4 py-2 rounded bg-gray-300 dark:bg-gray-600 text-black dark:text-white">Cancel</button>
+        <button onClick={confirmTransfer} className="px-4 py-2 rounded bg-green-600 text-white">Confirm</button>
+      </div>
+    </div>
+  </div>
+)}
+
+
     </>
   );
 };

@@ -228,6 +228,7 @@ const DepositModal = ({ show, onClose, balance, setBalance }) => {
   const [depositing, setDepositing] = useState(false);
   const [success, setSuccess] = useState(false);
   const dummyBankBalance = 50000;
+const [bankBalance, setBankBalance] = useState(null);
 
 
 const handleDeposit = async () => {

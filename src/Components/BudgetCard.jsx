@@ -1,20 +1,50 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 
-const BudgetCard = ({ budgetTotal, budgetSpent }) => {
+const BudgetCard = () => {
   const { isDarkMode } = useTheme();
   const navigate = useNavigate();
-  const spentPercent = budgetTotal > 0 ? Math.round((budgetSpent / budgetTotal) * 100) : 0;
+  const [budgetData, setBudgetData] = useState({ spent: 0, budget: 0 });
+
+const spentPercent = budgetData.budget > 0 
+  ? Math.min(Math.round((budgetData.spent / budgetData.budget) * 100), 100)
+  : 0;
+
+
   const data = [
-    { name: 'Spent', value: budgetSpent },
-    { name: 'Remaining', value: Math.max(budgetTotal - budgetSpent, 0) },
+    { name: 'Spent', value: budgetData.spent },
+    { name: 'Remaining', value: Math.max(budgetData.budget - budgetData.spent, 0) },
   ];
+
   const COLORS = isDarkMode 
-    ? ['#A6E22E', '#374151'] // Dark mode colors
-    : ['#005339', '#E8F5E9']; // Light mode colors
+    ? ['#A6E22E', '#374151'] 
+    : ['#005339', '#E8F5E9'];
+
+  useEffect(() => {
+    const fetchBudget = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      try {
+        const res = await axios.get('http://localhost:9000/api/budget/status', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log(res)
+        setBudgetData({
+          budget: res.data.budget,
+          spent: res.data.spent
+        });
+      } catch (error) {
+        console.error("Failed to load budget status:", error);
+      }
+    };
+
+    fetchBudget();
+  }, []);
 
   return (
     <motion.div 
@@ -27,14 +57,10 @@ const BudgetCard = ({ budgetTotal, budgetSpent }) => {
           : 'bg-white shadow-sm border border-gray-100 hover:bg-gray-50'
       }`}
     >
-      {/* Title */}
-      <h2 className={`font-[Montserrat] text-[15px] font-medium mb-2 ${
-        isDarkMode ? 'text-gray-200' : 'text-gray-800'
-      }`}>
-        Monthly Budget
+      <h2 className={`font-[Montserrat] text-[15px] font-medium mb-2 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+        Latest Budget
       </h2>
 
-      {/* Pie Chart */}
       <div className="relative">
         <PieChart width={80} height={80}>
           <Pie
@@ -43,7 +69,6 @@ const BudgetCard = ({ budgetTotal, budgetSpent }) => {
             cy="50%"
             innerRadius={30}
             outerRadius={38}
-            paddingAngle={0}
             dataKey="value"
             strokeWidth={0}
           >
@@ -52,25 +77,19 @@ const BudgetCard = ({ budgetTotal, budgetSpent }) => {
             ))}
           </Pie>
         </PieChart>
-        {/* Percentage in middle */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-          <span className={`text-lg font-semibold ${
-            isDarkMode ? 'text-gray-200' : 'text-gray-800'
-          }`}>
+          <span className={`text-lg font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
             {spentPercent}%
           </span>
         </div>
       </div>
 
-      {/* Budget info */}
       <div className="mt-3 text-center">
         <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          <span className={`font-medium ${
-            isDarkMode ? 'text-gray-200' : 'text-gray-800'
-          }`}>
-            PKR {budgetSpent.toLocaleString()}K
+          <span className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+            PKR {budgetData.spent.toLocaleString()}
           </span>
-          {' '}of {budgetTotal.toLocaleString()}K
+          {' '}of {budgetData.budget.toLocaleString()}
         </p>
       </div>
     </motion.div>

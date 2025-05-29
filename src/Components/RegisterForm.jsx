@@ -181,7 +181,7 @@ const handleSubmit = async () => {
         }`}>
           <Lock size={18} className={isDarkMode ? 'text-gray-400' : 'text-gray-500'} />
           <input
-            type="number"
+            type="password"
             name="transaction_pin"
             value={formData.transaction_pin}
             onChange={handleInputChange}

@@ -14,6 +14,7 @@ import { getGreeting, getRandomTip } from '../utils/timeUtils';
 import { motion } from 'framer-motion';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
   const [greeting, setGreeting] = useState(getGreeting());
@@ -96,13 +97,16 @@ const Dashboard = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <img 
-                    src={profileimg} 
-                    alt="Profile" 
-                    className={`w-12 h-12 rounded-full object-cover shadow-md ring-2 ${
-                      isDarkMode ? 'ring-gray-700' : 'ring-white'
-                    }`}
-                  />
+                  <Link to="/profile">
+  <img 
+    src={profileimg} 
+    alt="Profile" 
+    className={`w-12 h-12 rounded-full object-cover shadow-md ring-2 ${
+      isDarkMode ? 'ring-gray-700' : 'ring-white'
+    } cursor-pointer`}
+  />
+</Link>
+
                 </motion.div>
               </div>
             </div>

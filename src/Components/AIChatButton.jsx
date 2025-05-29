@@ -19,10 +19,6 @@ const parseTransferInstruction = (text) => {
       recipientName: match[2].trim()
     };
   }
-  if (transferDetails && !transferExecuted) {
-  setPendingTransfer(transferDetails);
-  setConfirming(true);
-}
 
   return null;
 };

@@ -60,7 +60,7 @@ const Navbar = () => {
           </motion.button>
         </Link>
 
-        <Link to="/scan">
+        <Link to="/dashboard">
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
